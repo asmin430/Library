@@ -1,1 +1,2 @@
-# kyoprolibrary
+# Library
+自由につかってね(他人のパクリが多い)
