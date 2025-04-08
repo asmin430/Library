@@ -3,8 +3,7 @@ struct BinaryIndexedTree{
 private:
     int n;
     vector<T> dat;
-public:
-    //コンストラクタ
+public
     BinaryIndexedTree() = default;
     explicit BinaryIndexedTree(int n): n(n){dat.assign(n + 1, T());}
     explicit BinaryIndexedTree(const vector<T> &v): BinaryIndexedTree((int)v.size()){
@@ -18,7 +17,6 @@ public:
             if(j <= n) dat[j] += dat[i];
         }
     }
-    //k 番目の要素に値 x を加算．
     void add(int k, const T &x){
         for(++k; k <= n; k += k & -k) dat[k] += x;
     }
@@ -27,9 +25,7 @@ public:
         for(; r > 0; r -= r & -r) ret += dat[r];
         return ret;
     }
-    //数列の区間 [l, r) の要素の総和を出力．
     T sum(int l, int r) const {return sum(r) - sum(l);}
-    //数列の区間 [0, k] の要素の総和が x 以上となる最小の k を出力．
     int lower_bound(T x) const {
         int i = 0;
         for(int k = 1 << (__lg(n) + 1); k > 0; k >>= 1){
@@ -40,7 +36,6 @@ public:
         }
         return i;
     }
-    //数列の区間 [0, k] の要素の総和が x を上回る最小の k を出力．
     int upper_bound(T x) const {
         int i = 0;
         for(int k = 1 << (__lg(n) + 1); k > 0; k >>= 1){
