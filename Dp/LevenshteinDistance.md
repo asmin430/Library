@@ -4,7 +4,7 @@ Levenshtein距離(編集距離)とは，できる操作を，「文字の挿入�
 
 # LevenshteinDistance
 ```cpp
-LevenshteinDistance(string S, string T)
+int LevenshteinDistance(string S, string T)
 ```
 文字列 `S`, `T` のLevenshtein距離を返す．
 
