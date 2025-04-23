@@ -58,8 +58,3 @@ public:
         }
     }
 };
-
-auto h = [](int a, int b) { return b; };
-auto id = []() { return INT_MAX; };
-DualSegmentTree seg(LambdaAct(h, id), N);
-
