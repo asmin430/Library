@@ -1,5 +1,5 @@
 template<typename TreeDPInfo>
-struct LinkCutTreeVertex{
+struct LinkCutTree{
     using Path = typename TreeDPInfo::Path;
     using Info = typename TreeDPInfo::Info;
     private:
@@ -185,7 +185,7 @@ struct LinkCutTreeVertex{
         return {nullptr, sum};
     }
     public:
-    LinkCutTreeVertex() = default;
+    LinkCutTree() = default;
     void exopse(int u){
         assert(u >= 0 && u < (int)nodes.size());
         expose(nodes[u]);
