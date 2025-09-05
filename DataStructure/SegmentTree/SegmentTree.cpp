@@ -1,108 +1,94 @@
-template<typename S2, typename Op, typename E>
-struct LambdaMonoid{
-    using S = S2;
-    S op(const S &a, const S &b) const {return _op(a, b);}
-    S e() const {return _e();}
-    LambdaMonoid(Op _op, E _e): _op(_op), _e(_e){}
-private:
-    Op _op;
-    E _e;
-};
-template<typename Op, typename E>
-LambdaMonoid(Op _op, E _e) -> LambdaMonoid<decltype(_e()), Op, E>;
-template<typename Monoid>
+template <typename T, auto op, auto e>
 struct SegmentTree{
-    using S = typename Monoid::S;
-private:
-    int n, sz;
-    vector<S> seg;
-    Monoid m;
-public:
-    SegmentTree() = default;
-    explicit SegmentTree(Monoid m, int n): m(m), n(n){
-        sz = 1;
-        while(sz < n) sz <<= 1;
-        seg.assign(2 * sz, m.e());
+    vector<T> dat;
+    int n, lg, sz;
+    
+    SegmentTree(){}
+    SegmentTree(int n){build(vector<T> (n, e())); }
+    SegmentTree(const vector<T> &v){build(v); }
+    void build(const vector<T> &v){
+        n = (int)v.size();
+        lg = 1;
+        while((1 << lg) < n) ++lg;
+        sz = (1 << lg);
+        dat.resize(sz << 1);
+        for(int i = 0; i < n; ++i) dat[sz + i] = v[i];
+        for(int i = sz - 1; i > 0; --i) update(i);
     }
-    explicit SegmentTree(Monoid m, const vector<S> &v): SegmentTree(m, (int)v.size()){
-        build(v);
+    
+    // i 番目の要素
+    T operator[](int &i){return dat[sz + i]; }
+    void update(int i){dat[i] = op(dat[2 * i], dat[2 * i + 1]); }
+    // i 番目の要素を x に変更
+    void set(int i, const T &x){
+        assert(i < n && i >= 0);
+        dat[i += sz] = x;
+        while(i >>= 1) update(i);
     }
-    void build(const vector<S> &v){
-        assert(n == (int)v.size());
-        for(int k = 0; k < n; ++k) seg[k + sz] = v[k];
-        for(int k = sz - 1; k > 0; --k){
-            seg[k] = m.op(seg[2 * k + 0], seg[2 * k + 1]);
-        }
-    }
-    void set(int k, const S &x){
-        k += sz;
-        seg[k] = x;
-        while(k >>= 1){
-            seg[k] = m.op(seg[2 * k + 0], seg[2 * k + 1]);
-        }
-    }
-    S get(int k) const {return seg[k + sz];}
-    S operator[](int k) const {return get(k);}
-    void apply(int k, const S &x){
-        k += sz;
-        seg[k] = m.op(seg[k], x);
-        while(k >>= 1){
-            seg[k] = m.op(seg[2 * k + 0], seg[2 * k + 1]);
-        }
-    }
-    S query(int l, int r) const {
-        if(l >= r) return m.e();
-        S L = m.e(), R = m.e();
-        for(l += sz, r += sz; l < r; l >>= 1, r >>= 1){
-            if(l & 1) L = m.op(L, seg[l++]);
-            if(r & 1) R = m.op(seg[--r], R);
-        }
-        return m.op(L, R);
-    }
-    S all_query() const {return seg[1];}
-    template<typename C>
-    int find_first(int l, const C &check) const {
-        if(l >= n) return n;
+    // [l, r) のクエリ 
+    T query(int l, int r){
+        assert(0 <= l && l <= r && r <= n);
+        T vl = e(), vr = e();
         l += sz;
-        S sum = m.e();
+        r += sz;
+        while(l < r){
+            if(l & 1) vl = op(vl, dat[l++]);
+            if(r & 1) vr = op(dat[--r], vr);
+            l >>= 1, r >>= 1;
+        }
+        return op(vl, vr);
+    }
+    // 全体クエリ
+    T all_query(){return dat[1]; }
+    // [l, x) が check を満たす最大の x
+    template<class F>
+    int max_right(F check, int l){
+        assert(0 <= l && l <= n && check(e()));
+        if(l == n) return n;
+        l += sz;
+        T sm = e();
         do{
-            while((l & 1) == 0) l >>= 1;
-            if(check(m.op(sum, seg[l]))){
+            while(!(l & 1)) l >>= 1;
+            if(!check(op(sm, dat[l]))){
                 while(l < sz){
-                    l <<= 1;
-                    auto nxt = m.op(sum, seg[l]);
-                    if(not check(nxt)){
-                        sum = nxt;
-                        ++l;
-                    }
+                    l = 2 * l;
+                    if(check(op, dat[l])) sm = op(sm, dat[l++]);
                 }
-                return l + 1 - sz;
+                return l - sz;
             }
-            sum = m.op(sum, seg[l++]);
+            sm = op(sm, dat[l++]);
         }while((l & -l) != l);
         return n;
     }
-    template<typename C>
-    int find_last(int r, const C &check) const {
-        if(r <= 0) return -1;
+    // [x, r) が check を満たす最小の x
+    template<class F>
+    int min_left(F check, int r){
+        assert(0<= r && r <= n && check(e()));
+        if(r == 0) return 0;
         r += sz;
-        S sum = m.e();
+        T sm = e();
         do{
-            r--;
-            while(r > 1 and (r & 1)) r >>= 1;
-            if(check(m.op(seg[r], sum))){
+            --r;
+            while(r > 1 && (r & 1)) r >>= 1;
+            if(!check(op(dat[r], sm))){
                 while(r < sz){
-                    r = (r << 1) + 1;
-                    auto nxt = m.op(seg[r], sum);
-                    if(not check(nxt)){
-                        sum = nxt;
-                        r--;
-                    }
+                    r = 2 * r + 1;
+                    if(check(op(dat[r], sm))) sm = op(dat[r], sm);
                 }
-                return r - sz;
+                return r + 1 - sz;
             }
-            sum = m.op(seg[r], sum);
         }while((r & -r) != r);
-        return -1;
+        return 0;
+    }
+    //可換のときだけ A[i xor xor_val] (l <= i < r) のクエリを出力
+    T xor_query(int l, int r, int xor_val){
+        T x = e();
+        for(int k = 0; k < lg + 1; ++k){
+            if(l >= r) break;
+            if(l & 1) x = op(x, dat[(sz >> k) + ((l++) ^ xor_val)]);
+            if(r & 1) x = op(x, dat[(sz >> k) + ((--r) ^ xor_val)]);
+            l >>= 1, r >>= 1, xor_val >>= 1;
+        }
+        return x;
     }
 };
