@@ -1,181 +1,134 @@
-template<typename S2, typename Op, typename E, typename F2, typename Mapping, typename Composition, typename Id>
-struct LambdaActedMonoid{
-    using S = S2;
-    using F = F2;
-    S op(const S &a, const S &b) const {return _op(a, b);}
-    S e() const {return _e();}
-    S mapping(const S &x, const F &f) const {return _mapping(x, f);}
-    F composition(const F &f, const F &g) const {return _composition(f, g);}
-    F id() const {return _id();}
-    
-    LambdaActedMonoid(Op _op, E _e, Mapping _mapping, Composition _composition,Id _id): _op(_op), _e(_e), _mapping(_mapping), _composition(_composition), _id(_id){}
-
-private:
-    Op _op;
-    E _e;
-    Mapping _mapping;
-    Composition _composition;
-    Id _id;
-};
-
-template<typename Op, typename E, typename Mapping, typename Composition, typename Id>
-LambdaActedMonoid(Op _op, E _e, Mapping _mapping, Composition _composition, Id _id) -> LambdaActedMonoid<decltype(_e()), Op, E, decltype(_id()), Mapping, Composition, Id>;
-
-template<typename ActedMonoid>
+template <typename T, auto op, auto e, typename F, auto mapping, auto composition, auto id>
 struct LazySegmentTree{
-    using S = typename ActedMonoid::S;
-    using F = typename ActedMonoid::F;
-
-private:
-    ActedMonoid m;
-    int n{}, sz{}, height{};
-    vector<S> dat;
-    vector<F> lazy;
-
-    inline void update(int k){
-        dat[k] = m.op(dat[2 * k + 0], dat[2 * k + 1]);
+    int n, lg, sz;
+    vector<T> dat;
+    vector<F> laz;
+    LazySegmentTree(){}
+    LazySegmentTree(int n){build(vector<T>(n, e())); }
+    LazySegmentTree(const vector<T> &v){build(v); }
+    void build(const vector<T> &v){
+        n = (int)v.size(), lg = 1;
+        while((1 << lg) < n) ++lg;
+        sz = (1 << lg);
+        dat.assign(sz << 1, e());
+        laz.assign(sz << 1, id());
+        for(int i = 0; i < n; ++i) dat[sz + i] = v[i];
+        for(int i = sz - 1; i >= 1; --i) update(i);
     }
-
-    inline void all_apply(int k, const F &x){
-        dat[k] = m.mapping(dat[k], x);
-        if(k < sz) lazy[k] = m.composition(lazy[k], x);
+    void update(int i){dat[i] = op(dat[2 * i], dat[2 * i + 1]); }
+    // [p] に x をセット
+    void set(int p, T x){
+        assert(0 <= p && p < n);
+        p += sz;
+        for(int i = lg; i >= 1; --i) push(p >> i);
+        dat[p] = x;
+        for(int i = 1; i <= lg; ++i) update(p >> i);
     }
-
-    inline void propagate(int k){
-        if(lazy[k] != m.id()){
-            all_apply(2 * k + 0, lazy[k]);
-            all_apply(2 * k + 1, lazy[k]);
-            lazy[k] = m.id();
+    T operator[](int p){
+        assert(0 <= p && p < n);
+        p += sz;
+        for(int i = lg; i >= 1; --i) push(p >> i);
+        return dat[p];
+    }
+    // [l, r) のクエリ
+    T query(int l, int r){
+        assert(0 <= l && l <= r && r <= n);
+        if(l == r) return e();
+        l += sz, r += sz;
+        for(int i = lg; i >= 1; --i){
+            if(((l >> i) << i) != l) push(l >> i);
+            if(((r >> i) << i) != r) push((r - 1) >> i);
         }
-    }
-
-public:
-    LazySegmentTree() = default;
-    explicit LazySegmentTree(ActedMonoid m, int n): m(m), n(n){
-        sz = 1;
-        height = 0;
-        while(sz < n) sz <<= 1, ++height;
-        dat.assign(2 * sz, m.e());
-        lazy.assign(2 * sz, m.id());
-    }
-    explicit LazySegmentTree(ActedMonoid m, const vector<S> &v): LazySegmentTree(m, v.size()){
-        build(v);
-    }
-
-    void build(const vector<S> &v){
-        assert(n == (int)v.size());
-        for(int k = 0; k < n; ++k) dat[k + sz] = v[k];
-        for(int k = sz - 1; k > 0; --k) update(k);
-    }
-
-    void set(int k, const S &x){
-        k += sz;
-        for(int i = height; i > 0; --i) propagate(k >> i);
-        dat[k] = x;
-        for(int i = 1; i <= height; ++i) update(k >> i);
-    }
-
-    S get(int k){
-        k += sz;
-        for(int i = height; i > 0; --i) propagate(k >> i);
-        return dat[k];
-    }
-
-    S operator[](int k){return get(k);}
-
-    S query(int l, int r){
-        if(l >= r) return m.e();
-        l += sz;
-        r += sz;
-        for(int i = height; i > 0; --i){
-            if(((l >> i) << i) != l) propagate(l >> i);
-            if(((r >> i) << i) != r) propagate((r - 1) >> i);
+        T xl = e(), xr = e();
+        while(l < r){
+            if(l & 1) xl = op(xl, dat[l++]);
+            if(r & 1) xr = op(dat[--r], xr);
+            l >>= 1, r >>= 1;
         }
-        S L = m.e(), R = m.e();
-        for(; l < r; l >>= 1, r >>= 1){
-            if(l & 1) L = m.op(L, dat[l++]);
-            if(r & 1) R = m.op(dat[--r], R);
-        }
-        return m.op(L, R);
+        return op(xl, xr);
     }
-
-    S all_query() const {return dat[1];}
-
-    void apply(int k, const F &f){
-        k += sz;
-        for(int i = height; i > 0; --i) propagate(k >> i);
-        dat[k] = m.mapping(dat[k], f);
-        for(int i = 1; i <= height; ++i) update(k >> i);
-    }
-
-    void apply(int l, int r, const F &f){
-        if(l >= r) return;
-        l += sz;
-        r += sz;
-        for(int i = height; i > 0; --i){
-            if(((l >> i) << i) != l) propagate(l >> i);
-            if(((r >> i) << i) != r) propagate((r - 1) >> i);
+    T all_query(){return dat[1]; }
+    // [l, r) に f を作用
+    void apply(int l, int r, F f){
+        assert(0 <= l && l <= r && r <= n);
+        if(l == r) return;
+        l += sz, r += sz;
+        for(int i = lg; i >= 1; --i){
+            if(((l >> i) << i) != l) push(l >> i);
+            if(((r >> i) << i) != r) push((r - 1) >> i);
         }
         int l2 = l, r2 = r;
-        for(; l < r; l >>= 1, r >>= 1){
-            if(l & 1) all_apply(l++, f);
-            if(r & 1) all_apply(--r, f);
+        while(l < r){
+            if(l & 1) apply_sub(l++, f);
+            if(r & 1) apply_sub(--r, f);
+            l >>= 1, r >>= 1;
         }
         l = l2, r = r2;
-        for(int i = 1; i <= height; ++i){
+        for(int i = 1; i <= lg; ++i){
             if(((l >> i) << i) != l) update(l >> i);
             if(((r >> i) << i) != r) update((r - 1) >> i);
         }
     }
-
-    template<typename C>
-    int find_first(int l, const C &check){
-        if(l >= n) return n;
+    template <typename C>
+    int max_right(const C check, int l){
+        assert(0 <= l && l <= n);
+        assert(check(e()));
+        if(l == n) return n;
         l += sz;
-        for(int i = height; i > 0; --i) propagate(l >> i);
-        S sum = m.e();
+        for(int i = lg; i >= 1; --i) push(l >> i);
+        T sm = e();
         do{
-            while((l & 1) == 0) l >>= 1;
-            if(check(m.op(sum, dat[l]))){
+            while(!(l & 1)) l >>= 1;
+            if(!check(op(sm, dat[l]))){
                 while(l < sz){
-                    propagate(l);
+                    push(l);
                     l <<= 1;
-                    auto nxt = m.op(sum, dat[l]);
-                    if(not check(nxt)){
-                        sum = nxt;
-                        ++l;
-                    }
+                    if(check(op(sm, dat[l]))) sm = op(sm, dat[l++]);
                 }
-                return l + 1 - sz;
+                return l - sz;
             }
-            sum = m.op(sum, dat[l++]);
+            sm = op(sm, dat[l++]);
         }while((l & -l) != l);
         return n;
     }
-
-    template<typename C>
-    int find_last(int r, const C &check){
-        if(r <= 0) return -1;
+    template <typename C>
+    int min_left(const C check, int r){
+        assert(0 <= r && r <= n);
+        assert(check(e()));
+        if(r == 0) return 0;
         r += sz;
-        for(int i = height; i > 0; --i) propagate((r - 1) >> i);
-        S sum = m.e();
+        for(int i = lg; i >= 1; --i) push((r - 1) >> i);
+        T sm = e();
         do{
-            --r;
+            r--;
             while(r > 1 && (r & 1)) r >>= 1;
-            if(check(m.op(dat[r], sum))){
+            if(!check(op(dat[r], sm))){
                 while(r < sz){
-                    propagate(r);
-                    r = (r << 1) + 1;
-                    auto nxt = m.op(dat[r], sum);
-                    if(not check(nxt)){
-                        sum = nxt;
-                        --r;
-                    }
+                    push(r);
+                    r = (2 * r + 1);
+                    if(check(op(dat[r], sm))) sm = op(dat[r--], sm);
                 }
-                return r - sz;
+                return r + 1 - sz;
             }
-            sum = m.op(dat[r], sum);
+            sm = op(dat[r], sm);
         }while((r & -r) != r);
-        return -1;
+        return 0;
+    }
+private:
+    void apply_sub(int k, F f){
+        dat[k] = mapping(dat[k], f);
+        if(k < sz) laz[k] = composition(laz[k], f);
+    }
+    void push(int k){
+        if(laz[k] == id()) return;
+        apply_sub(2 * k, laz[k]);
+        apply_sub(2 * k + 1, laz[k]);
+        laz[k] = id();
     }
 };
+
+
+
+
+
+
